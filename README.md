@@ -27,5 +27,12 @@ th = which.min(colSums(FLOSSES))/100
 
 #cut the matrix
 R = R[abs(R)<th]=0
+```
 
+### Simulation Code
+
+The monte_carlo folder contains source code for simulation. The simulation can be executed with the following R command:
+
+```R
+source('exe.R')
 

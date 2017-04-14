@@ -1,4 +1,4 @@
-# Robust Sparse Correlation Matrices
+# Robust Sparse Correlation
 
 This is the R implementation of a robust correlation matrix estimator usefull in case of high-dimensional data to remove the bias. 
 

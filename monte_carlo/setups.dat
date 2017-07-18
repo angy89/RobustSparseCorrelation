@@ -1,7 +1,0 @@
-ncase   ModelNum  ModelName       cr
-1       1 	      Spherical       0.2
-2       1 	      Spherical       1
-3       1 	      Spherical       20
-4       2 	      BlockDiagonal   0.2
-5       2 	      BlockDiagonal   1
-6       2  	      BlockDiagonal   20

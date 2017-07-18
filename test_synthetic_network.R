@@ -1,8 +1,8 @@
-source("R/AdaptiveThresholding/cormad.R")
-source("R/AdaptiveThresholding/bin_matrix.R")
-source("R/AdaptiveThresholding/thresholding.R")
-source("R/AdaptiveThresholding/compute_statistics.R")
-source("R/AdaptiveThresholding/correlations_cv.R")
+source("cormad.R")
+source("bin_matrix.R")
+source("thresholding.R")
+source("compute_statistics.R")
+source("correlations_cv.R")
 
 
 library(parallel)

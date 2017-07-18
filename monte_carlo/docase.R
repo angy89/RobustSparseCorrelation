@@ -1,26 +1,50 @@
+## Load case parameters
+##
 ModelNum  <- setups[ncase, 2]
 ModelName <- setups[ncase, 3]
 cr        <- setups[ncase, 4]
-n         <- ceiling(p/cr)
+p         <- floor(n * cr)
+fn        <- paste(formatC(ncase, width=2, format = "d", flag = "0"))
 
-## File naming
-fn <- paste(formatC(ncase, width=2, format = "d", flag = "0"))
+
+
+## Build the correlation models
+##
+CorModel      <- array(0, dim=c(p,p,2))
+## Spherical
+CorModel[,,1] <- diag(1, p)
+## Block diagonal
+p1 <-  round(p/2)
+tmp <- diag(1, p)
+tmp[1:p1, 1:p1] <- cov.ar(p1, rho = 0.7, marg.vars=NULL)
+CorModel[,,2] <- tmp
+
+
 
 ## Pick the correlation model
 Sig      <- CorModel[ , , ModelNum]
 eigenSig <- eigen(Sig, symmetric = TRUE)
 
+
 ## Initialize containers
-FROB <- matrix(0, nrow=R, ncol=4)
-colnames(FROB) <- c('SampleCor', 'ThresholdSampleCor', 'RobustCor', 'ThresholdRobustCor')
+Mets  <- c('Rn',  'Tau',  'Rho',  'Tbw',  'RMAD',
+           'TRn', 'TTau', 'TRho', 'TTbw', 'RSC')
+FROB  <- matrix(NA, nrow=R, ncol=10)
+colnames(FROB) <- Mets
 EIGL1 <- FROB
-FITSCOUNT <- array(0, dim=c(R,4,4)) ## FITSCOUNT[R, estimator, count_type]
-dimnames(FITSCOUNT)[[2]] <- as.list(colnames(FROB))
-dimnames(FITSCOUNT)[[3]] <- c("zero2nonzero", "zero2high",    "high2zero",   "signswitch")
+##
+FITSCOUNT <- array(NA, dim=c(R,10,4)) ## FITSCOUNT[R, estimator, count_type]
+dimnames(FITSCOUNT)[[2]] <- Mets
+dimnames(FITSCOUNT)[[3]] <- c("zero2nonzero", "E1",    "E2",   "SS")
+##
+THRESHOLDS <- matrix(NA, nrow=R, ncol=5)
+colnames(THRESHOLDS) <- Mets[6:10]
+
+
 
 
 ## Objects to be saved
-Obj2Save <- c('FROB', 'EIGL1', 'FITSCOUNT', 'last.rep')
+Obj2Save <- c('FROB', 'EIGL1', 'FITSCOUNT', 'THRESHOLDS', 'last.rep')
 
 
 cat("\n\n\n")
@@ -30,59 +54,154 @@ t0 <- Sys.time()
 for (r in 1:R){
   message('Case #', ncase, ': ',  ModelName, ' model - ', 'Estimation at Replica ', r, ' of ', R)
 
-  sim <- dgp(n=n, eigcov=eigenSig, cont.rate=cont.rate)
+  sim <- dgp(n=n, eigcov=eigenSig)
 
-
-  ## Sampling correlation
-  message('........ Computing sample correlation')
-  Rn        <- cor(sim$data)
-  RnValues  <- eigen(Rn, symmetric=TRUE)$values
+  ## Compute Rn
+  nMet    <- 1L
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  X         <- Rn <- cor(sim$data)
+  X_values  <- eigen(X, symmetric=TRUE)$values
   ## Store results
-  FROB[r, 1]      <- norm(Rn   - Sig, "F")
-  EIGL1[r, 1]     <- sum(abs(RnValues - eigenSig$values))
-  FITSCOUNT[r,1,] <- fitcounts(ref=Sig, fitted=Rn)
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
 
 
-
-
-  ## Thresholded sample correlation
-  message('........ Computing thresholded sample correlation')
-  hsample <- cv.Rn(data=sim$data, nsplits=nsplits)$threshold
-  TRn     <- Rn
-  TRn[abs(Rn) <= hsample] <- 0
-  TRnValues  <- eigen(TRn, symmetric=TRUE)$values
+  ## Compute Tau
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  X         <- Tau <- cor(sim$data, method = "kendall")
+  X_values  <- eigen(X, symmetric=TRUE)$values
   ## Store results
-  FROB[r, 2]      <- norm(TRn   - Sig, "F")
-  EIGL1[r, 2]     <- sum(abs(TRnValues - eigenSig$values))
-  FITSCOUNT[r,2,] <- fitcounts(ref=Sig, fitted=TRn)
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
 
 
 
-
-  ## Robust correlation based on cormad
-  message('........ Computing robust correlation')
-  vecRmad <- cormad.vec(sim$data)
-  Rmad    <- cormad.vec2mat(vecRmad)
-  RmadValues <- eigen(Rmad, symmetric=TRUE)$values
+  ## Compute Rho
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  X         <- Rho <- cor(sim$data, method = 'spearman')
+  X_values  <- eigen(X, symmetric=TRUE)$values
   ## Store results
-  FROB[r, 3]      <- norm(Rmad   - Sig, "F")
-  EIGL1[r, 3]     <- sum(abs(RmadValues - eigenSig$values))
-  FITSCOUNT[r,3,] <- fitcounts(ref=Sig, fitted=Rmad)
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
 
 
 
-  ## RCS: robust sparse correlations
-  message('........ Computing thresholded robust correlation')
-  hmad <- cv.Rmad(data=sim$data, nsplits=nsplits)$threshold
-  Rsc  <- Rmad
-  Rsc[abs(Rmad) <= hmad] <- 0
-  RscValues <- eigen(Rsc, symmetric=TRUE)$values
+  ## Compute TBW
+  nMet    <- 1L + nMet
+  ##
+  ## @Angela: qui hai il TBW, tieni conto degli NA
+  ##          se non vuoi eseguire il thresholding su TBW commenta il seguente
+  ##          blocco di codice
+  ##
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  vecTbw    <- TBW.vec(sim$data)
+  X         <- Tbw  <- vec2mat(vecTbw)
+  X_values  <- eigen(X, symmetric=TRUE)$values
   ## Store results
-  FROB[r, 4]      <- norm(Rsc   - Sig, "F")
-  EIGL1[r, 4]     <- sum(abs(RscValues - eigenSig$values))
-  FITSCOUNT[r,4,] <- fitcounts(ref=Sig, fitted=Rsc)
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
 
-  last.rep <- r
+
+
+  ## Compute RMAD
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  vecRmad   <- cormad.vec(sim$data)
+  X         <- Rmad  <- vec2mat(vecRmad)
+  X_values  <- eigen(X, symmetric=TRUE)$values
+  ## Store results
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
+
+
+
+  ## Compute TRn
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  hsample <- THRESHOLDS[r, {nMet-5}] <-  cv.Rn(data=sim$data, nsplits=nsplits)$threshold
+  X <- Rn
+  X[abs(X) <= hsample] <- 0
+  X_values  <- eigen(X, symmetric=TRUE)$values
+  ## Store results
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
+
+
+
+  ## Compute TTau
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  hsample <- THRESHOLDS[r, {nMet-5}] <- cv.Tau(data=sim$data, nsplits=nsplits)$threshold
+  X <- Tau
+  X[abs(X) <= hsample] <- 0
+  X_values  <- eigen(X, symmetric=TRUE)$values
+  ## Store results
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
+
+
+
+
+  ## Compute TRho
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  hsample <- THRESHOLDS[r, {nMet-5}] <- cv.Rho(data=sim$data, nsplits=nsplits)$threshold
+  X <- Rho
+  X[abs(X) <= hsample] <- 0
+  X_values  <- eigen(X, symmetric=TRUE)$values
+  ## Store results
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
+
+
+
+
+
+  ## Compute TTBW
+  nMet    <- 1L + nMet
+  ##
+  ## @Angela: qui hai il TBW tagliato, tieni conto degli NA
+  ##          se non vuoi eseguire il thresholding su TBW commenta il seguente
+  ##          blocco di codice
+  ##
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  hsample <- THRESHOLDS[r, {nMet-5}] <- cv.TBW(data=sim$data, nsplits=nsplits)$threshold
+  X <- Tbw
+  X[abs(X) <= hsample] <- 0
+  X_values  <- eigen(X, symmetric=TRUE)$values
+  ## Store results
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
+
+
+
+
+  ## Compute RSC
+  nMet    <- 1L + nMet
+  message(paste('........ Computing ', Mets[nMet], sep=''))
+  hsample <- THRESHOLDS[r, {nMet-5}] <- cv.Rmad(data=sim$data, nsplits=nsplits)$threshold
+  X <- Rmad
+  X[abs(X) <= hsample] <- 0
+  X_values  <- eigen(X, symmetric=TRUE)$values
+  ## Store results
+  FROB[r, nMet]      <- norm(X   - Sig, "F")
+  EIGL1[r, nMet]     <- sum(abs(X_values - eigenSig$values))
+  FITSCOUNT[r,nMet,] <- fitcounts(ref=Sig, fitted=X)
+
+
+   last.rep <- r
+
 
   if(r>=10 & {(r%%10)==0}){
     system(paste("rm   ",  fn, ".RData", sep=""))
@@ -112,12 +231,5 @@ SessionInfo <- session_info()
 EndDate     <- Sys.time()
 Obj2Save    <- c(Obj2Save, 'SessionInfo', 'EndDate')
 save(list=Obj2Save, file=paste(fn, ".RData", sep=""))
-
-
-
-
-
-
-
 
 

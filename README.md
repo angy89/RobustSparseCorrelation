@@ -1,8 +1,6 @@
 # Robust Sparse Correlation
 
-This is the R implementation of a robust correlation matrix estimator usefull in case of high-dimensional data to remove the bias. 
-
-It also implement an adaptive thresholding technique based on cross validation tecnique to regularize the correlation matrix.
+This is the R implementation of a robust correlation matrix estimator usefull in case of high-dimensional data to remove the bias. It also implement an adaptive thresholding technique based on cross validation tecnique to regularize the correlation matrix.
 
 Reference Paper:
 

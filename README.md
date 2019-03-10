@@ -4,6 +4,11 @@ This is the R implementation of a robust correlation matrix estimator usefull in
 
 It also implement an adaptive thresholding technique based on cross validation tecnique to regularize the correlation matrix.
 
+Reference Paper:
+
+> Serra, A., Coretto, P., Fratello, M., & Tagliaferri, R. (2017). Robust and sparse correlation matrix estimation for the analysis of high-dimensional genomics data. Bioinformatics, 34(4), 625-634.
+
+
 ### Demo
 ```R
 source("cormad.R")
